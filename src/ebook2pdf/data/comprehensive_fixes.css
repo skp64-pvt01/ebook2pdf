@@ -370,3 +370,9 @@ div.epub2pdf-code-block code {
 li code, td code, th code {
     font-size: 0.8em !important;
 }
+
+/* Reduced list block offset from enclosing text */
+ul, ol {
+    padding-left: 0.8em !important;
+    margin-left: 0.3em !important;
+}
