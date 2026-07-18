@@ -371,8 +371,16 @@ li code, td code, th code {
     font-size: 0.8em !important;
 }
 
-/* Reduced list block offset from enclosing text */
+/* Reduced list block offset from enclosing text, including nested lists */
 ul, ol {
     padding-left: 0.8em !important;
     margin-left: 0.3em !important;
+}
+ul ul, ul ol, ol ul, ol ol {
+    padding-left: 0.7em !important;
+    margin-left: 0.25em !important;
+}
+ul ul ul, ul ol ol, ol ul ul, ol ol ol {
+    padding-left: 0.55em !important;
+    margin-left: 0.2em !important;
 }
