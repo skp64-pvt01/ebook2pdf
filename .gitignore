@@ -1,12 +1,10 @@
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-.venv/
+# Build artifacts
 build/
 dist/
+src/*.egg-info
 .pybuild/
+__pycache__/
+*.pyc
 
 # Debian package artifacts
 *.deb
@@ -14,10 +12,12 @@ dist/
 *.buildinfo
 *.tar.gz
 debian/.debhelper/
-debian/files
-debian/epub2pdf/
+debian/ebook2pdf/
 debian/*.log
 debian/*.substvars
+
+# Generated sample output
+samples/out-app/*.pdf
 
 # IDE
 .vscode/
@@ -28,3 +28,8 @@ debian/*.substvars
 # OS
 .DS_Store
 Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*~

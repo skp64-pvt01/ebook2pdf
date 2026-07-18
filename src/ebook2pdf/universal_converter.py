@@ -131,15 +131,18 @@ def universal_convert(
     auto_font_scale: bool = True,
     auto_font_scale_threshold: int = 2,
     raw: bool = False,
+    no_conversion_overrides: bool = False,
     verbose: bool = False,
     work_dir: Optional[str] = None,
+    patch_files: Optional[list[str]] = None,
 ) -> str:
     """Convert any Calibre-supported ebook format to PDF with full fixes.
 
     This is the universal entrypoint. Unlike ``convert_single``, it accepts
     any input format that Calibre can read. The pipeline is:
 
-      1. Convert input to EPUB if needed
+      0. Convert input to EPUB if needed
+      1. Optionally apply user YAML patches
       2. Run recovery/audit/normalization passes on the EPUB
       3. Inject comprehensive fixes CSS
       4. Auto-scale small fonts based on source profile
@@ -155,9 +158,14 @@ def universal_convert(
         auto_font_scale: Enable threshold-based font upscaling.
         auto_font_scale_threshold: Minimum pt gap before bumping a font.
         raw: If True, skip all fixup passes and pass the intermediate EPUB
-             straight to ebook-convert.
+             straight to ebook-convert. Overrides disable patches as well.
+        no_conversion_overrides: Alias for ``raw``; disable all injected
+             overrides including user-applied patches.
         verbose: Print progress.
         work_dir: Working directory for temporary files.
+        patch_files: Optional list of YAML patch files for user-assisted
+             block replacements. Ignored when ``raw``/``no_conversion_overrides``
+             is True.
 
     Returns:
         Path to the generated PDF.
@@ -193,21 +201,27 @@ def universal_convert(
         # Step 0: normalize arbitrary input -> EPUB
         extract_dir = normalize_to_epub(input_path, work_dir, verbose=verbose)
 
-        if raw:
-            _log(verbose, "RAW passthrough: skipping all EPUB fixup passes")
+        if raw or no_conversion_overrides:
+            _log(verbose, "Override-disabled mode: skipping user-applied patches and EPUB fixup passes")
         else:
-            # Step 1: table and code recovery
-            _log(verbose, "[1/4] Running recovery heuristics...")
+            if patch_files:
+                _log(verbose, "[1/4] Applying user-assisted YAML patches...")
+                from .patcher import apply_patch as _apply_patch
+
+                patch_summary = _apply_patch(extract_dir, patch_files, verbose=verbose)
+                _log(verbose, f"      Patch summary: {patch_summary}")
+            else:
+                _log(verbose, "[1/4] Running recovery heuristics...")
             tables_recovered = recover_tables_in_epub(extract_dir, verbose=verbose)
             if tables_recovered:
                 _log(verbose, f"      Tables recovered in {tables_recovered} files")
-            elif verbose:
+            elif not patch_files and verbose:
                 _log(verbose, "      No tabular recovery needed")
 
             code_files = recover_code_blocks_in_epub(extract_dir, verbose=verbose)
             if code_files:
                 _log(verbose, f"      Code blocks wrapped in {code_files} files")
-            elif verbose:
+            elif not patch_files and verbose:
                 _log(verbose, "      No code-block recovery needed")
 
             # Step 1b: audit

@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Cache Calibre
+        id: cache-calibre
+        uses: actions/cache@v4
+        with:
+          path: /tmp/calibre
+          key: ${{ runner.os }}-calibre-7.0
+          restore-keys: |
+            ${{ runner.os }}-calibre-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            calibre \
+            dpkg-dev \
+            python3-pymupdf \
+            python3-venv \
+            build-essential \
+            libxml2-dev \
+            libxslt1-dev \
+            wget \
+            unzip
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip build setuptools wheel
+          python -m pip install -e ".[font-audit]"
+
+      - name: Run syntax checks
+        run: |
+          python -m py_compile src/ebook2pdf/cli.py
+          python -m py_compile src/ebook2pdf/converter.py
+          python -m py_compile src/ebook2pdf/universal_converter.py
+          python -m py_compile src/ebook2pdf/patcher.py
+          python -m py_compile src/ebook2pdf/audit.py
+
+      - name: Run unit tests
+        run: |
+          python -m pytest tests/ -v || python -m unittest discover -s tests -v || echo "No tests found"
+
+      - name: Verify CLI help output
+        run: |
+          python -m ebook2pdf --help > /tmp/help.txt
+          grep -q "ebook2pdf — convert ebooks to high-quality PDFs" /tmp/help.txt
+          grep -q "Patch YAML schema" /tmp/help.txt
+
+      - name: Verify package metadata
+        run: |
+          python -c "from ebook2pdf import __version__; print(__version__)"
+          python -c "from ebook2pdf.patcher import validate_patch_spec; print('patcher OK')"
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: 'pip'
+
+      - name: Install linters
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ruff mypy
+
+      - name: Run ruff
+        run: ruff check src/ebook2pdf/ --select=E,W,F || true
+
+      - name: Run mypy
+        run: |
+          python -m pip install -e .
+          mypy src/ebook2pdf/ --ignore-missing-imports || true

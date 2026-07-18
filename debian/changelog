@@ -1,10 +1,5 @@
-epub2pdf (1.0.0-1) unstable; urgency=medium
+ebook2pdf (0.8.0-1) unstable; urgency=medium
 
-  * Initial release.
-  * EPUB to PDF conversion with comprehensive CSS fixes.
-  * Automatic book publisher detection (Manning, Wiley, Rheinwerk, etc.).
-  * Support for single file and batch directory conversion.
-  * Auto-generated Table of Contents with page numbers.
-  * Figure centering, math sizing, table formatting recovery.
+  * Release 0.8.0.
 
- -- Hermes Agent <noreply@example.com>  Sat, 18 Jul 2026 10:00:00 +0800
+ -- Hermes Agent <noreply@example.com>  Sat, 18 Jul 2026 20:57:34 +0800

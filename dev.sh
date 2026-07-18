@@ -16,6 +16,11 @@
 #    git-remote     Configure git remote (GitHub or GitLab)
 #    commit         Stage all changes and commit
 #    push           Push current branch to remote
+#    release        Run full release flow: test → version bump → commit → tag → push
+#    release-bump   Bump version (patch/minor/major or set explicitly)
+#    release-tag    Create and push annotated semver tag
+#    release-start  Create release branch from tag
+#    changelog      Show change log since last tag
 #    full           Run: clean → setup → build → deb → test
 #    help           Show this message
 #
@@ -26,14 +31,17 @@
 #    ./dev.sh git-remote github myuser ebook2pdf
 #    ./dev.sh commit "Bump font sizes and add code-block heuristics"
 #    ./dev.sh push
+#    ./dev.sh release-bump patch
+#    ./dev.sh release-tag
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
 APP_NAME="ebook2pdf"
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEB_PACKAGE="${APP_DIR}/../${APP_NAME}_1.0.0-1_all.deb"
+DEB_PACKAGE="$(ls "${APP_DIR}/../${APP_NAME}"_*.deb 2>/dev/null | head -1 || true)"
 PYTHON="${PYTHON:-python3}"
 VERBOSE="${VERBOSE:-1}"
+CURRENT_VERSION="$(python3 -c "import sys; sys.path.insert(0, '${APP_DIR}/src'); import importlib.util; spec = importlib.util.spec_from_file_location('pkg', '${APP_DIR}/src/ebook2pdf/__init__.py'); mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); print(mod.__version__)" 2>/dev/null || echo "1.0.0")"
 
 log()  { [ "$VERBOSE" -ge 1 ] && printf "  \033[1;32m*\033[0m %s\n" "$*"; }
 warn() { [ "$VERBOSE" -ge 1 ] && printf "  \033[1;33m!\033[0m %s\n" "$*" >&2; }
@@ -98,7 +106,7 @@ cmd_test() {
   fi
   if [ -z "$epub" ] || [ ! -f "$epub" ]; then
     # Fallback: generate a tiny test EPUB
-    epub="/tmp/epub2pdf_test.epub"
+    epub="/tmp/ebook2pdf_test.epub"
     log "Creating minimal test EPUB at $epub …"
     local d
     d=$(mktemp -d)
@@ -174,7 +182,7 @@ cmd_font_audit() {
   # Run post-conversion font verification if PyMuPDF is available
   if $PYTHON -c "import fitz" 2>/dev/null; then
     log "Running post-conversion font size verification..."
-    out_pdf="/tmp/epub2pdf_font_audit.pdf"
+    out_pdf="/tmp/ebook2pdf_font_audit.pdf"
     rm -f "$out_pdf"
     if command -v ${APP_NAME} &>/dev/null; then
       ${APP_NAME} "$epub" -o "$out_pdf" --rewrite-toc-page-numbers >/dev/null 2>&1 || true
@@ -327,6 +335,182 @@ cmd_push() {
   log "Push complete."
 }
 
+cmd_changelog() {
+  cd "$APP_DIR"
+  local tag
+  tag=$(git describe --abbrev=0 --tags 2>/dev/null || echo "")
+  if [ -z "$tag" ]; then
+    log "No tags found. Showing all commits:"
+    git log --oneline -20
+  else
+    log "Changes since $tag:"
+    git log --oneline "$tag..HEAD"
+  fi
+}
+
+_cmd_set_version() {
+  local version="$1"
+  local file="$APP_DIR/src/ebook2pdf/__init__.py"
+  local old="__version__ = \"$CURRENT_VERSION\""
+  local new="__version__ = \"$version\""
+  if [ -f "$file" ]; then
+    sed -i "s|$old|$new|g" "$file" || sed -i.bak "s|$old|$new|g" "$file"
+    log "Version bumped: $CURRENT_VERSION → $version"
+    CURRENT_VERSION="$version"
+  else
+    err "Version file not found: $file"
+  fi
+}
+
+cmd_release_bump() {
+  local scope="${1:-patch}"
+  cd "$APP_DIR"
+
+  if [[ ! "$scope" =~ ^(patch|minor|major|[0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+    err "Usage: ./dev.sh release-bump [patch|minor|major|<version>]\nCurrent version: $CURRENT_VERSION"
+  fi
+
+  local IFS='.'
+  read -r major minor patch <<EOF
+$CURRENT_VERSION
+EOF
+
+  case "$scope" in
+    major)
+      major=$((major + 1)); minor=0; patch=0
+      ;;
+    minor)
+      minor=$((minor + 1)); patch=0
+      ;;
+    patch)
+      patch=$((patch + 1))
+      ;;
+    *)
+      # Explicit version
+      if [[ "$scope" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+        major="${BASH_REMATCH[1]}"
+        minor="${BASH_REMATCH[2]}"
+        patch="${BASH_REMATCH[3]}"
+      else
+        err "Invalid version format: $scope"
+      fi
+      ;;
+  esac
+
+  local new_version="$major.$minor.$patch"
+  _cmd_set_version "$new_version"
+
+  # Update setup.py
+  if [ -f "$APP_DIR/setup.py" ]; then
+    if grep -q '^version="'"$CURRENT_VERSION"'"' "$APP_DIR/setup.py"; then
+      sed -i "s|version=\"$CURRENT_VERSION\"|version=\"$new_version\"|g" "$APP_DIR/setup.py" || true
+    else
+      # setup.py now reads version from __init__.py dynamically; nothing to update there
+      :
+    fi
+  fi
+
+  # Update debian/changelog
+  if [ -f "$APP_DIR/debian/changelog" ]; then
+    local deb_version="${new_version}-1"
+    local date
+    date=$(date -R)
+    cat > "$APP_DIR/debian/changelog" <<EOF
+ebook2pdf ($deb_version) unstable; urgency=medium
+
+  * Release $new_version.
+
+ -- Hermes Agent <noreply@example.com>  $date
+EOF
+    log "Updated debian/changelog to $deb_version"
+  fi
+
+  log "Ready to commit version bump to $new_version"
+}
+
+cmd_release_tag() {
+  local tag_spec="${1:-$CURRENT_VERSION}"
+  local tag="v$tag_spec"
+  cd "$APP_DIR"
+
+  if git rev-parse "$tag" >/dev/null 2>&1; then
+    err "Tag $tag already exists"
+  fi
+
+  local message="Release $tag
+
+Changes in this release:
+$(git log --oneline -10)"
+
+  git tag -a "$tag" -m "$message"
+  log "Created annotated tag: $tag"
+  log "Push with: git push origin $tag"
+}
+
+cmd_release_start() {
+  local tag="${1:-}"
+  local branch="release/${tag#v}"
+  cd "$APP_DIR"
+
+  if [ -z "$tag" ]; then
+    tag=$(git describe --abbrev=0 --tags 2>/dev/null || echo "")
+    if [ -z "$tag" ]; then
+      err "No tags found. Create a tag first with: ./dev.sh release-tag"
+    fi
+  fi
+
+  if git rev-parse "$tag" >/dev/null 2>&1; then
+    :
+  else
+    err "Tag $tag does not exist"
+  fi
+
+  if git show-ref --verify --quiet "refs/heads/$branch"; then
+    warn "Branch $branch already exists"
+    git checkout "$branch"
+  else
+    git checkout -b "$branch" "$tag"
+    log "Created branch $branch from $tag"
+  fi
+}
+
+cmd_release() {
+  local scope="${1:-patch}"
+  local run_tests="${RUN_TESTS:-1}"
+  cd "$APP_DIR"
+
+  log "=== Starting release flow for $APP_NAME ==="
+
+  # 1. Run tests
+  if [ "$run_tests" = "1" ]; then
+    log "[1/5] Running tests..."
+    cmd_test || err "Tests failed. Aborting release."
+  fi
+
+  # 2. Version bump
+  log "[2/5] Bumping version ($scope)..."
+  cmd_release_bump "$scope"
+
+  # 3. Commit
+  log "[3/5] Committing version bump..."
+  cmd_commit "Release v$CURRENT_VERSION: bump version and update packaging metadata"
+
+  # 4. Tag
+  log "[4/5] Creating release tag..."
+  cmd_release_tag "$CURRENT_VERSION"
+
+  # 5. Push
+  log "[5/5] Pushing to remote..."
+  cmd_push
+  git push origin "v$CURRENT_VERSION" || warn "Tag push may require explicit confirmation"
+
+  log "=== Release complete: v$CURRENT_VERSION ==="
+  log "Next steps:"
+  log "  1. Create GitHub release at: $(git remote get-url origin | sed 's|git@github.com:|https://github.com/|g; s|\.git$||')/releases/new?tag=v$CURRENT_VERSION"
+  log "  2. Upload .deb: $DEB_PACKAGE"
+  log "  3. Or merge release/* branch and let CI build artifacts"
+}
+
 cmd_full() {
   cmd_clean
   cmd_setup
@@ -346,6 +530,11 @@ case "${1:-help}" in
   install)     cmd_install ;;
   test)        shift; cmd_test "$@" ;;
   font-audit)  shift; cmd_font_audit "$@" ;;
+  changelog)   cmd_changelog ;;
+  release-bump) shift; cmd_release_bump "$@" ;;
+  release-tag)  shift; cmd_release_tag "$@" ;;
+  release-start) shift; cmd_release_start "$@" ;;
+  release)     shift; cmd_release "$@" ;;
   clean)       cmd_clean ;;
   git-init)    cmd_git_init ;;
   git-remote)  shift; cmd_git_remote "$@" ;;

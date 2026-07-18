@@ -65,6 +65,8 @@ def convert_single(
     raw: bool = False,
     verbose: bool = False,
     work_dir: str | None = None,
+    patch_files: list[str] | None = None,
+    no_conversion_overrides: bool = False,
 ) -> str:
     """
     Convert a single EPUB to PDF with comprehensive fixes.
@@ -193,6 +195,12 @@ def convert_single(
         else:
             _log(verbose, f"[3/4] Injecting CSS fixes...")
             _inject_css(extract_dir)
+
+        if patch_files:
+            from .patcher import apply_patch as _apply_patch
+            _log(verbose, f"[3.5/4] Applying patch overrides...")
+            patch_summary = _apply_patch(extract_dir, patch_files, verbose=verbose)
+            _log(verbose, f"      Patch summary: {patch_summary}")
 
         _log(verbose, f"[4/4] Converting to PDF...")
         epub_out = os.path.join(work_dir, "fixed_output.epub")

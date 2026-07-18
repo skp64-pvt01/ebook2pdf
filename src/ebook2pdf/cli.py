@@ -56,18 +56,66 @@ def build_parser() -> argparse.ArgumentParser:
     """Build and return the argument parser."""
     parser = argparse.ArgumentParser(
         prog="ebook2pdf",
-        description="Convert ebooks to PDF with comprehensive formatting fixes. "
-                    "Supports any format Calibre can read, including PDF input.",
+        description=textwrap.dedent("""\
+            ebook2pdf — convert ebooks to high-quality PDFs with automatic formatting fixes.
+
+            It accepts any Calibre-supported input format, applies CSS and content
+            recovery passes to an intermediate EPUB, and produces a PDF with readable
+            fonts, centered figures, recovered tables, code-block styling, and a
+            table of contents with page numbers.
+
+            Modes:
+              • Simple:  ebook2pdf book.epub
+              • Batch:   ebook2pdf /path/to/ebooks/ --recursive --output-dir ./pdfs/
+              • Raw:     ebook2pdf book.epub --raw                 (preserve source settings)
+              • Patch:   ebook2pdf book.epub --patch-file fix.yaml (user-assisted overrides)
+              • Universal converter:  ebook2pdf book.pdf --force-universal
+        """),
         epilog=textwrap.dedent("""\
             Examples:
+              # Basic single-file conversion
               ebook2pdf book.epub
+
+              # Explicit output path
               ebook2pdf book.epub -o output.pdf --verbose
-              ebook2pdf book.pdf -o repaired.pdf --raw
-              ebook2pdf /path/to/ebooks/ --recursive
-              ebook2pdf /path/to/ebooks/ --output-dir /path/to/pdfs/
-              ebook2pdf /path/to/ebooks/ --font-size 10 --margin 24
+
+              # Preserve source ebook settings without overrides
               ebook2pdf book.epub --raw
+
+              # User-assisted block replacements for tables, code blocks, or figures
+              ebook2pdf book.epub --patch-file ./fixes/table-patches.yaml
+              ebook2pdf book.epub --patch-file ./fixes/code-patches.yaml --patch-file ./fixes/figure-patches.yaml
+
+              # Recursive batch conversion with output directory
+              ebook2pdf /path/to/ebooks/ --recursive --output-dir /path/to/pdfs/
+
+              # Convert non-EPUB input using the universal pipeline
               ebook2pdf book.mobi --format mobi
+              ebook2pdf scanned.pdf --force-universal -o repaired.pdf --raw
+
+              # Custom typography and margins
+              ebook2pdf book.epub --font-size 12 --body-font-size 11 --mono-font-size 10 --margin 24
+
+              # Disable automatic font upscaling
+              ebook2pdf book.epub --no-auto-font-scale --font-size 14 --body-font-size 13 --mono-font-size 11
+
+              # Rewrite PDF ToC entries with actual page numbers
+              ebook2pdf book.epub --rewrite-toc-page-numbers -o book-indexed.pdf
+
+            Patch YAML schema:
+              files:
+                - filename: "<ebook basename>"
+                  assets_dir: "./assets"
+                  blocks:
+                    - type: table | code-block | figure
+                      prologue: |
+                        <text immediately before the block>
+                      epilogue: |
+                        <text immediately after the block>
+                      replacement: |
+                        <Markdown replacement content>
+
+            For more details, see README.md and plan-patch-mode.md.
         """),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -197,11 +245,25 @@ def build_parser() -> argparse.ArgumentParser:
         help="Passthrough mode: disable all injected overrides and use source ebook conversion settings",
     )
     parser.add_argument(
+        "--no-conversion-overrides",
+        dest="no_conversion_overrides",
+        action="store_true",
+        default=False,
+        help="Disable ALL conversion overrides, including user-applied patches. Passes the source ebook settings directly to ebook-convert.",
+    )
+    parser.add_argument(
         "--force-universal",
         dest="force_universal",
         action="store_true",
         default=False,
         help="Force the universal multi-format pipeline even for EPUB inputs",
+    )
+    parser.add_argument(
+        "--patch-file",
+        dest="patch_files",
+        action="append",
+        default=None,
+        help="Path to a YAML patch file describing assisted replacements for tables, code blocks, and figures. May be specified multiple times.",
     )
     parser.add_argument(
         "--no-toc",
@@ -286,6 +348,7 @@ def run_cli(argv: list[str] | None = None) -> int:
         "auto_font_scale_threshold": args.auto_font_scale_threshold,
         "raw": args.raw,
         "verbose": args.verbose,
+        "patch_files": args.patch_files,
     }
 
     is_batch = os.path.isdir(input_path)
