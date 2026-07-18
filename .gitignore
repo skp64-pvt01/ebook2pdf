@@ -16,8 +16,9 @@ debian/ebook2pdf/
 debian/*.log
 debian/*.substvars
 
-# Generated sample output
-samples/out-app/*.pdf
+# Sample files - place your own test ebooks in samples/
+samples/*
+!samples/README.md
 
 # IDE
 .vscode/

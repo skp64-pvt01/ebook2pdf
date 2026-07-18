@@ -154,19 +154,15 @@ For the full schema and troubleshooting, see `./doc/USERGUIDE.md`.
 7. **Convert to PDF** — `ebook-convert` produces the final PDF with settings overrides
 8. **Post-process** — optional ToC page-number rewrite using actual rendered pages
 
-## Building the .deb package
+## Sample Files
+
+Place your own test ebooks in the `samples/` directory. This directory is ignored by git.
 
 ```bash
-cd /home/sysadmin/tmp/ebook2pdf
-chmod +x debian/rules
-dpkg-buildpackage -us -uc -b
+ebook2pdf ./samples --recursive --output-dir ./pdf-output
 ```
 
-Or use the helper script:
-
-```bash
-./dev.sh deb
-```
+If you don't have sample files, you can generate a minimal test EPUB or point the tool at any Calibre-supported ebook on your system.
 
 ## Development
 
