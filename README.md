@@ -3,158 +3,83 @@
 EPUB to PDF converter with comprehensive formatting fixes.
 
 Converts ebooks to high-quality PDFs with automatic content recovery, CSS injection,
-font-size enforcement, user-assisted patch mode, and universal input support.
+font-size enforcement, user-assisted patch injection, and a universal Calibre-backed
+input pipeline. Includes a typed patch workflow so you can override content, add code
+blocks, substitute figures, or inject tables without forking the source.
 
-## Features
+Features
+- Universal input: accepts EPUB, PDF, MOBI, AZW3, FB2, DOCX, TXT, and other
+  Calibre-supported formats
+- Recoverable pipeline: converts any supported format to an intermediate EPUB,
+  applies fixes, then produces the final PDF
+- Typographic controls: header 14pt, body 13pt, code 11pt; auto-scale with
+  `--auto-font-scale-threshold`
+- Patch mode: YAML-driven content patches via `--patch-file`
+- Python API + CLI
 
-- **Single file conversion** — `ebook2pdf book.epub`
-- **Batch directory conversion** — `ebook2pdf /path/to/ebooks/ --recursive --output-dir ./pdfs/`
-- **Universal input** — accepts any Calibre-supported format via `ebook-convert` (`--force-universal`)
-- **Automatic publisher detection** — Manning, Wiley, Rheinwerk, Calibre, Google Docs exports
-- **Typography control** — base, body, and mono font targets with threshold-based auto-scaling
-- **Content recovery** — table, code block, and figure heuristics
-- **Patch mode** — YAML-driven manual overrides for problematic regions
-- **Table of contents** — PDF ToC with right-aligned page numbers and optional rewrite to actual page numbers
+Requirements
+- Python 3.10+
+- Calibre (`ebook-convert`)
+- PyMuPDF optional for font auditing
 
-## Installation
-
-### From .deb
-
-```bash
-sudo apt install ./ebook2pdf_1.0.0-1_all.deb
-```
-
-### From source
+Install
 
 ```bash
-pip install .
+# From PyPI
+pip install ebook2pdf
+
+# From .deb release asset
+wget https://github.com/skp64-pvt01/ebook2pdf/releases/download/v1.0.0/ebook2pdf_1.0.0-1_all.deb
+sudo dpkg -i ebook2pdf_1.0.0-1_all.deb
 ```
 
-## Dependencies
-
-- `calibre` (>= 7.0) — for `ebook-convert`
-- `python3` (>= 3.10)
-
-Install calibre with:
+Quick Start
 
 ```bash
-sudo apt-get install -y calibre
+# Convert an EPUB
+ebook2pdf book.epub -o book.pdf
+
+# Convert all files in samples/
+ebook2pdf ./samples --recursive --output-dir ./out
+
+# Use patch mode
+ebook2pdf book.epub -o book.pdf --patch-file patch.yaml
 ```
 
-## Quick Start
-
-```bash
-# Basic conversion
-ebook2pdf book.epub
-
-# Convert a directory recursively
-ebook2pdf /path/to/ebooks/ --recursive --output-dir /path/to/pdfs/
-
-# Preserve source settings
-ebook2pdf book.epub --raw
-
-# Universal pipeline for non-EPUB input
-ebook2pdf book.mobi --format mobi
-ebook2pdf scanned.pdf --force-universal -o repaired.pdf --raw
-```
-
-## Usage
-
-```
-ebook2pdf [options] <input>
-
-Positional:
-  input            Ebook file or directory containing ebook files
-
-Options:
-  -o OUTPUT        Output PDF path or batch output directory
-  -r, --recursive  Search directories recursively
-  -v, --verbose    Show detailed progress
-  --version        Show version
-
-Input/output:
-  --format INPUT_FORMAT               Input format override
-  --output-format OUTPUT_FORMAT       Output format (default: pdf)
-  --force-universal                   Force universal pipeline for EPUB too
-
-Font sizing:
-  --font-size SIZE                    Base font size in pt (default: 14)
-  --body-font-size SIZE               Body font size in pt (default: 13)
-  --mono-font-size SIZE               Mono/code font size in pt (default: 11)
-  --no-auto-font-scale                Disable auto-scaling for small fonts
-  --auto-font-scale-threshold N       Minimum pt gap to trigger scaling (default: 2)
-
-Margins:
-  --margin MARGIN                     Uniform margin in pts
-  --margin-top SIZE                   Top margin (default: 36)
-  --margin-bottom SIZE                Bottom margin (default: 36)
-  --margin-left SIZE                  Left margin (default: 36)
-  --margin-right SIZE                 Right margin (default: 36)
-
-Behavior:
-  --no-page-numbers                   Disable page number footer
-  --rewrite-toc-page-numbers          Rewrite ToC entries to actual page numbers
-  --no-toc                            Disable auto-generated Table of Contents
-  --raw                               Preserve source settings; skip injected fixes
-  --no-conversion-overrides           Disable all overrides, including patches
-  --patch-file PATH                   Apply YAML patch file (may repeat)
-
-Examples:
-  ebook2pdf book.epub
-  ebook2pdf book.epub -o output.pdf --verbose
-  ebook2pdf book.epub --raw
-  ebook2pdf book.epub --patch-file ./fixes/tables.yaml --patch-file ./fixes/code.yaml
-  ebook2pdf /path/to/ebooks/ --recursive --output-dir /path/to/pdfs/
-  ebook2pdf /path/to/ebooks/ --font-size 12 --body-font-size 11 --mono-font-size 10 --margin 24
-  ebook2pdf book.epub --no-auto-font-scale --font-size 14 --body-font-size 13 --mono-font-size 11
-  ebook2pdf book.epub --rewrite-toc-page-numbers -o book-indexed.pdf
-  ebook2pdf book.mobi --format mobi
-  ebook2pdf scanned.pdf --force-universal -o repaired.pdf --raw
-```
-
-## Patch Mode
-
-Patch mode lets you manually override problematic tables, code blocks, or figures in specific ebooks.
-
-Example YAML:
+Patch Mode
 
 ```yaml
-files:
-  - filename: "<ebook basename>"
-    assets_dir: "./assets"
+entries:
+  - input: book.epub
     blocks:
-      - type: table | code-block | figure
-        prologue: |
-          <text immediately before the block>
-        epilogue: |
-          <text immediately after the block>
-        replacement: |
-          <Markdown replacement content>
+      - mode: insert_after
+        anchor: "Introduction"
+        html: "<div>Injected content</div>"
 ```
 
-Usage:
+Use `--patch-file patch.yaml` to apply patches during conversion.
+
+Configuration
 
 ```bash
-ebook2pdf book.epub \
-  --patch-file ./fixes/tables.yaml \
-  --patch-file ./fixes/code.yaml \
-  -o book-patched.pdf
+ebook2pdf --help
 ```
 
-For the full schema and troubleshooting, see `./doc/USERGUIDE.md`.
+Release Workflow
 
-## How It Works
+This project uses annotated semver tags to trigger releases.
 
-1. **Extract / normalize input** — EPUB is unzipped or other formats are converted to EPUB via Calibre
-2. **Apply patches** — optional user-assisted YAML replacements
-3. **Recover content** — heuristics restore tables, code blocks, and captions
-4. **Audit** — font sizes and margins are checked and auto-fixed when possible
-5. **Inject CSS** — comprehensive fixes are appended to stylesheets
-6. **Auto-scale fonts** — small source fonts are bumped based on configurable thresholds
-7. **Convert to PDF** — `ebook-convert` produces the final PDF with settings overrides
-8. **Post-process** — optional ToC page-number rewrite using actual rendered pages
+```bash
+./dev.sh release-bump patch
+./dev.sh release-tag
+git push origin v1.0.1
+```
 
-## Sample Files
+GitHub Actions will build the Debian package, then create a GitHub Release with the `.deb` asset.
+
+For full pipeline and architecture details, see `./doc/DESIGN.md`.
+
+Sample Files
 
 Place your own test ebooks in the `samples/` directory. This directory is ignored by git.
 
@@ -164,26 +89,16 @@ ebook2pdf ./samples --recursive --output-dir ./pdf-output
 
 If you don't have sample files, you can generate a minimal test EPUB or point the tool at any Calibre-supported ebook on your system.
 
-## Development
+Development
 
 ```bash
-./dev.sh setup
+git clone https://github.com/skp64-pvt01/ebook2pdf.git
+cd ebook2pdf
+python -m venv .venv
 source .venv/bin/activate
-./dev.sh test
-./dev.sh font-audit samples/Generative\\ AI\\ for\\ Communications\\ Systems....epub
+pip install -e ".[font-audit]"
 ```
 
-## Release Workflow
+License
 
-This project uses annotated semver tags to trigger releases.
-
-```bash
-./dev.sh release-bump patch
-./dev.sh release-tag
-./dev.sh push
-git push origin v1.0.1
-```
-
-GitHub Actions will build `.deb` and Python packages, then create a GitHub Release with assets.
-
-For full pipeline and architecture details, see `./doc/DESIGN.md`.
+MIT

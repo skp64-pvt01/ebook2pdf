@@ -62,7 +62,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip build setuptools wheel
+          python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e ".[font-audit]"
 
       - name: Prepare release metadata
@@ -80,16 +80,27 @@ jobs:
           python -c "from ebook2pdf import __version__"
           python -m ebook2pdf --help > /dev/null
 
-      - name: Build Python package
+      - name: Build Debian package
         run: |
-          python -m build --outdir dist/
+          chmod +x debian/rules || true
+          ./dev.sh deb
 
-      - name: Store Python artifacts
+      - name: Verify Debian package
+        run: |
+          DEB_FILE=$(ls ../ebook2pdf_*_all.deb 2>/dev/null | head -1)
+          if [ -z "$DEB_FILE" ]; then
+            echo "::error::No .deb package found"
+            exit 1
+          fi
+          echo "Found package: $DEB_FILE"
+          ls -lh "$DEB_FILE"
+
+      - name: Store Debian artifact
         uses: actions/upload-artifact@v4
         with:
-          name: python-packages
+          name: debian-package
           path: |
-            dist/*
+            ../*.deb
           retention-days: 90
 
       - name: Store test log
@@ -142,11 +153,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download Python artifacts
+      - name: Download Debian artifact
         uses: actions/download-artifact@v4
         with:
-          name: python-packages
-          path: release/dist/
+          name: debian-package
+          path: release/
 
       - name: Create GitHub Release
         env:
@@ -154,6 +165,12 @@ jobs:
         run: |
           TAG="${{ needs.validate-tag.outputs.tag_name }}"
           VERSION="${{ needs.validate-tag.outputs.version }}"
+          DEB_FILE=$(find release/ -name '*.deb' | head -1)
+
+          if [ -z "$DEB_FILE" ]; then
+            echo "::error::No .deb package available for release"
+            exit 1
+          fi
 
           cat > /tmp/release_notes.md <<EOF
           # ebook2pdf $VERSION
@@ -163,47 +180,20 @@ jobs:
           ## Installation
 
           \`\`\`bash
-          # Install via pip
-          pip install ebook2pdf
-
-          # Or download Python package
-          # See assets below for wheel/sdist
-          \`\`\`
-
-          ### Debian package
-
-          A Debian package is available as a release asset when present.
-
-          \`\`\`bash
-          # Example after downloading the .deb asset:
-          sudo dpkg -i ebook2pdf_$VERSION-1_all.deb
+          # Download and install
+          wget https://github.com/skp64-pvt01/ebook2pdf/releases/download/$TAG/$(basename "$DEB_FILE")
+          sudo dpkg -i $(basename "$DEB_FILE")
           \`\`\`
 
           ## Checksums
 
           \`\`\`
+          $(sha256sum "$DEB_FILE")
+          \`\`\`
           EOF
-
-          for f in release/dist/*; do
-            if [ -f "$f" ]; then
-              sha256sum "$f" >> /tmp/release_notes.md
-            fi
-          done
-
-          echo "\`\`\`" >> /tmp/release_notes.md
 
           gh release create "$TAG" \
             --title "ebook2pdf $VERSION" \
             --notes-file /tmp/release_notes.md \
-            --target main
-
-      - name: Upload Python artifacts
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="${{ needs.validate-tag.outputs.tag_name }}"
-          for f in release/dist/*; do
-            if [ -f "$f" ]; then
-              gh release upload "$TAG" "$f" || true
-            fi
-          done
+            --target main \
+            "$DEB_FILE"

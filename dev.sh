@@ -77,12 +77,89 @@ cmd_build() {
 }
 
 cmd_deb() {
-  log "Building .deb package…"
-  cd "$APP_DIR"
-  chmod +x debian/rules 2>/dev/null || true
-  dpkg-buildpackage -us -uc -b 2>&1 | tail -5
-  log "Package built: $(ls -lh "$APP_DIR/../${APP_NAME}"_*.deb 2>/dev/null | awk '{print $5, $NF}')"
-}
+  cmd_deb() {
+    log "Building .deb package…"
+    chmod +x debian/rules 2>/dev/null || true
+    if command -v dpkg-buildpackage >/dev/null 2>&1; then
+      dpkg-buildpackage -us -uc -b 2>&1 | tail -5
+    else
+      cmd_deb_fallback
+    fi
+    log "Package built: $(ls -lh "$APP_DIR/../${APP_NAME}"_*.deb 2>/dev/null | awk '{print $5, $NF}')"
+  }
+
+  cmd_deb_fallback() {
+    log "Building .deb with pure-bash fallback..."
+    local version
+    version=$(python3 -c "import sys; sys.path.insert(0,'$APP_DIR/src'); from ${APP_DIR##*/} import __version__; print(__version__)")
+
+    local workdir
+    workdir=$(mktemp -d)
+    local pkgdir="$workdir/${APP_NAME}_${version}-1_all"
+    local debdir="$pkgdir/DEBIAN"
+    local datadir="$pkgdir/usr"
+    mkdir -p "$debdir" "$datadir"
+
+    if [ -d "$APP_DIR/debian/ebook2pdf/DEBIAN" ]; then
+      cp -r "$APP_DIR/debian/ebook2pdf/DEBIAN/"* "$debdir/" 2>/dev/null || true
+    fi
+
+    if [ ! -f "$debdir/control" ] || [ -f "$APP_DIR/debian/control" ]; then
+      mkdir -p "$debdir"
+      if [ -f "$APP_DIR/debian/control" ]; then
+        sed "s/^Version: .*/Version: ${version}-1/" "$APP_DIR/debian/control" > "$debdir/control" 2>/dev/null || true
+      fi
+      if [ ! -s "$debdir/control" ]; then
+        printf 'Package: %s\nVersion: %s-1\nArchitecture: all\nMaintainer: %s\nDescription: %s\n' \
+          "$APP_NAME" "$version" "$(git config user.email 2>/dev/null || echo ci-bot@local)" \
+          "$APP_NAME package" > "$debdir/control"
+      fi
+    fi
+
+    if [ -d "$APP_DIR/debian/ebook2pdf" ]; then
+      cp -a "$APP_DIR/debian/ebook2pdf/." "$pkgdir/" 2>/dev/null || true
+    fi
+
+    if [ ! -d "$pkgdir/usr/lib/python3/dist-packages/${APP_NAME}" ]; then
+      mkdir -p "$pkgdir/usr/lib/python3/dist-packages"
+      cp -a "$APP_DIR/src/${APP_NAME}" "$pkgdir/usr/lib/python3/dist-packages/${APP_NAME}"
+    fi
+
+    mkdir -p "$pkgdir/usr/bin"
+    cat > "$pkgdir/usr/bin/${APP_NAME}" <<'BIN'
+  #!/usr/bin/env bash
+  set -e
+  DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  PYTHONPATH="${DIR}/../lib/python3/dist-packages${PYTHONPATH:+:$PYTHONPATH}"
+  export PYTHONPATH
+  exec python3 -m "${APP_NAME}" "$@"
+  BIN
+    chmod 0755 "$pkgdir/usr/bin/${APP_NAME}"
+
+    find "$pkgdir" -type f -exec chmod 0644 {} +
+    find "$pkgdir" -type d -exec chmod 0755 {} +
+
+    local md5sums
+    md5sums="$debdir/md5sums"
+    find "$pkgdir" -type f -not -path "$debdir/*" -exec md5sum {} + > "$md5sums" 2>/dev/null || true
+    sed -i "s|$workdir/||g" "$md5sums" 2>/dev/null || true
+
+    local size
+    size=$(du -sk "$pkgdir" | awk '{print $1}')
+    printf 'Installed-Size: %s\n' "$size" >> "$debdir/control"
+    [ -f "$debdir/postinst" ] && chmod 0755 "$debdir/postinst"
+    [ -f "$debdir/prerm" ] && chmod 0755 "$debdir/prerm"
+
+    pushd "$workdir" >/dev/null
+    ar rcs "${APP_NAME}_${version}-1_all.deb" \
+      debian-binary \
+      control.tar.gz \
+      data.tar.gz
+    popd >/dev/null
+
+    cp "$pkgdir.deb" "$APP_DIR/../${APP_NAME}_${version}-1_all.deb"
+    rm -rf "$workdir"
+  }
 
 cmd_install() {
   local deb
