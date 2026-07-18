@@ -69,7 +69,9 @@ jobs:
             dh-python \
             python3-all \
             python3-pypdf \
-            build-essential
+            build-essential \
+            autoconf \
+            automake
 
       - name: Install Python dependencies
         run: |
