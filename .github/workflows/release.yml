@@ -92,7 +92,11 @@ jobs:
       - name: Build Debian package
         run: |
           chmod +x debian/rules
-          ./dev.sh deb
+          ./dev.sh build
+          if ! ./dev.sh deb; then
+            echo "Falling back to dpkg-buildpackage -d"
+            dpkg-buildpackage -us -uc -b -d
+          fi
 
       - name: Store Debian artifact
         uses: actions/upload-artifact@v4
