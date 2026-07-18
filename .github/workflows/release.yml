@@ -81,9 +81,10 @@ jobs:
           python -m ebook2pdf --help > /dev/null
 
       - name: Build Debian package
+        id: deb-build
         run: |
-          chmod +x debian/rules || true
-          ./dev.sh deb
+          bash ./dev.sh deb
+          ls -lh ../ebook2pdf_*_all.deb 2>/dev/null || true
 
       - name: Verify Debian package
         run: |
@@ -195,5 +196,5 @@ jobs:
           gh release create "$TAG" \
             --title "ebook2pdf $VERSION" \
             --notes-file /tmp/release_notes.md \
-            --target main \
+            --target master \
             "$DEB_FILE"
