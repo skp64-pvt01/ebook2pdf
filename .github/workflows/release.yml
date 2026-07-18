@@ -116,7 +116,7 @@ jobs:
         with:
           name: debian-package
           path: |
-            ../*.deb
+            ebook2pdf.deb
           retention-days: 90
 
       - name: Store test log
