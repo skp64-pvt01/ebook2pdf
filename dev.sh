@@ -156,7 +156,7 @@ cmd_deb_fallback() {
     data.tar.gz
   popd >/dev/null
 
-  cp "$pkgdir.deb" "$APP_DIR/../${APP_NAME}_${version}-1_all.deb"
+  cp "$pkgdir.deb" "$APP_DIR/../${APP_NAME}_${version}-1_all.deb" || cp "$workdir/${APP_NAME}_${version}-1_all.deb" "$APP_DIR/../${APP_NAME}_${version}-1_all.deb"
   rm -rf "$workdir"
 }
 

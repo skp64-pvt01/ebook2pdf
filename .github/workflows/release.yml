@@ -98,7 +98,8 @@ jobs:
         id: deb-build
         run: |
           bash ./dev.sh deb
-          ls -lh ../ebook2pdf_*_all.deb 2>/dev/null || true
+          cp ../ebook2pdf_*_all.deb ./ebook2pdf.deb 2>/dev/null || true
+          ls -lh ./ebook2pdf.deb 2>/dev/null || true
 
       - name: Verify Debian package
         run: |
