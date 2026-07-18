@@ -80,7 +80,7 @@ cmd_deb() {
   log "Building .deb package…"
   chmod +x debian/rules 2>/dev/null || true
   if command -v dpkg-buildpackage >/dev/null 2>&1; then
-    dpkg-buildpackage -us -uc -b 2>&1 | tail -5
+    dpkg-buildpackage -us -uc -b -d 2>&1 | tail -5
   else
     cmd_deb_fallback
   fi

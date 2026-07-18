@@ -1,15 +1,15 @@
 Source: ebook2pdf
 Section: text
 Priority: optional
-Maintainer: Hermes Agent <noreply@example.com>
-Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-setuptools, python3-pypdf
+Maintainer: ebook2pdf <ci@ebook2pdf.local>
+Build-Depends: python3-all, python3-setuptools, python3-wheel
 Standards-Version: 4.6.2
-Homepage: https://github.com/example/ebook2pdf
+Homepage: https://github.com/skp64-pvt01/ebook2pdf
 Rules-Requires-Root: no
 
 Package: ebook2pdf
 Architecture: all
-Depends: ${python3:Depends}, ${misc:Depends}, calibre (>= 7.0), python3 (>= 3.10), python3-pypdf
+Depends: ${python3:Depends}, ${misc:Depends}, python3 (>= 3.10), calibre (>= 7.0)
 Description: Ebook to PDF converter with comprehensive formatting fixes
  Converts ebook files to high-quality PDFs with automatic detection of
  book publisher type, CSS injection for justified text, centered figures,
