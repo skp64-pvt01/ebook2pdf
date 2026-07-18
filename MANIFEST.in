@@ -1,0 +1,2 @@
+include src/ebook2pdf/data/*.css
+global-include *.css

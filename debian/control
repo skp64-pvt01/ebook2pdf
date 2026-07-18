@@ -1,0 +1,18 @@
+Source: epub2pdf
+Section: text
+Priority: optional
+Maintainer: Hermes Agent <noreply@example.com>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-setuptools, python3-pypdf
+Standards-Version: 4.6.2
+Homepage: https://github.com/example/epub2pdf
+Rules-Requires-Root: no
+
+Package: epub2pdf
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends}, calibre (>= 7.0), python3 (>= 3.10), python3-pypdf
+Description: EPUB to PDF converter with comprehensive formatting fixes
+ Converts EPUB files to high-quality PDFs with automatic detection of
+ book publisher type, CSS injection for justified text, centered figures,
+ table formatting, math formula sizing, and auto-generated Table of
+ Contents with page numbers.
+ Supports single-file and batch directory conversion.

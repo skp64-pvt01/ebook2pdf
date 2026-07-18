@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+build/
+dist/
+.pybuild/
+
+# Debian package artifacts
+*.deb
+*.changes
+*.buildinfo
+*.tar.gz
+debian/.debhelper/
+debian/files
+debian/epub2pdf/
+debian/*.log
+debian/*.substvars
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
